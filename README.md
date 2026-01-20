@@ -1,362 +1,177 @@
-# 🤖 AI Agent Backend
+# 🤖 AI Agent Backend v2.0
 
-Sistema backend de agentes conversacionais inteligentes com suporte a WhatsApp, Email e interface web.
+Sistema de Agentes Conversacionais Inteligentes com inicialização automática de banco de dados.
 
-## 📋 Features
+## ✨ Novidades da Versão 2.0
 
-- ✅ **Multi-agente**: Crie e gerencie múltiplos agentes de IA
-- ✅ **Multi-canal**: WhatsApp, Email e Web Chat
-- ✅ **LLM Integration**: OpenAI GPT-4o-mini (otimizado para custos)
-- ✅ **RAG Support**: Sistema de documentos e busca semântica (Fase 2)
-- ✅ **Conversas persistentes**: Histórico completo no PostgreSQL
-- ✅ **Analytics**: Métricas de uso, custos e performance
-- ✅ **API REST**: Totalmente documentada com FastAPI
+- ✅ **Inicialização automática do banco de dados** (sem necessidade de Railway CLI)
+- ✅ **Deploy simplificado** (apenas conectar PostgreSQL e configurar variáveis)
+- ✅ **2 agentes pré-configurados** (Vendedor Inteligente e Suporte Técnico)
+- ✅ **API REST completa** com documentação Swagger automática
+- ✅ **Cálculo automático de custos** por conversa
+- ✅ **Health checks** para monitoramento
 
-## 🏗️ Stack Técnico
+## 🚀 Deploy Rápido (5 minutos)
 
-### Backend
-- **FastAPI** - Framework web assíncrono
-- **PostgreSQL** - Database principal
-- **Redis** - Cache e filas
-- **SQLAlchemy** - ORM
-- **Alembic** - Migrations
+### 1. Criar conta no Railway
+https://railway.app (grátis)
 
-### AI/ML
-- **OpenAI GPT-4o-mini** - Modelo principal
-- **OpenAI Embeddings** - Para RAG (Fase 2)
-- **Qdrant** - Vector database (Fase 2)
+### 2. Criar novo projeto
+- Clique em "New Project"
+- Selecione "Deploy from GitHub repo"
+- Conecte este repositório
 
-### Integrações
-- **Twilio** - WhatsApp Business API
-- **MailerSend** - Envio de emails
+### 3. Adicionar PostgreSQL
+- No projeto, clique "+ New"
+- Selecione "Database" → "Add PostgreSQL"
 
-### Deploy
-- **Railway** - Hosting + CI/CD
+### 4. Configurar variáveis
+Na aba "Variables" do serviço backend, adicione:
 
-## 📦 Instalação Local
+```
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxx
+PORT=8000
+```
 
-### Pré-requisitos
-- Python 3.11+
-- PostgreSQL 15+
-- Redis 7+
-- Git
+### 5. Deploy automático!
+Railway fará deploy automaticamente. Aguarde ~2 minutos.
 
-### 1. Clone o repositório
+### 6. Testar
 ```bash
-git clone https://github.com/seu-usuario/ai-agent-backend.git
-cd ai-agent-backend
+curl https://seu-projeto.up.railway.app/health
 ```
 
-### 2. Crie ambiente virtual
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate  # Windows
-```
+## 📚 Documentação Completa
 
-### 3. Instale dependências
-```bash
-pip install -r requirements.txt
-```
+Veja [RAILWAY_DEPLOY_GUIDE.md](RAILWAY_DEPLOY_GUIDE.md) para instruções detalhadas.
 
-### 4. Configure variáveis de ambiente
-```bash
-cp .env.example .env
-# Edite .env com suas credenciais
-```
+## 🔌 API Endpoints
 
-**Variáveis obrigatórias:**
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-REDIS_URL=redis://localhost:6379/0
-OPENAI_API_KEY=sk-...
-SECRET_KEY=seu-secret-key-aqui
-ADMIN_PASSWORD=senha-segura-aqui
-```
+### Health
+- `GET /health` - Status geral
+- `GET /health/db` - Status do banco de dados
 
-### 5. Execute migrations
-```bash
-alembic upgrade head
-```
+### Agentes
+- `GET /api/agents` - Listar todos
+- `GET /api/agents/{id}` - Buscar por ID
+- `POST /api/agents` - Criar novo
+- `PUT /api/agents/{id}` - Atualizar
+- `DELETE /api/agents/{id}` - Deletar
 
-### 6. Inicie o servidor
-```bash
-uvicorn app.main:app --reload
-```
+### Conversas
+- `POST /api/chat` - Enviar mensagem
+- `GET /api/conversations` - Listar conversas
+- `GET /api/conversations/{id}` - Detalhes
+- `GET /api/conversations/{id}/messages` - Histórico
 
-Acesse: http://localhost:8000/docs
-
-## 🚀 Deploy no Railway
-
-### Preparação
-
-1. **Crie repositório no GitHub**
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/seu-usuario/ai-agent-backend.git
-git push -u origin main
-```
-
-2. **Crie conta no Railway**: https://railway.app
-
-### Deploy Automático
-
-1. **Novo Projeto Railway**
-   - Dashboard > New Project > Deploy from GitHub
-   - Selecione seu repositório
-   - Railway detectará automaticamente FastAPI
-
-2. **Adicione PostgreSQL**
-   - New > Database > PostgreSQL
-   - Copie `DATABASE_URL` das variáveis
-
-3. **Adicione Redis**
-   - New > Database > Redis
-   - Copie `REDIS_URL` das variáveis
-
-4. **Configure Variáveis de Ambiente**
-   
-   No painel do serviço FastAPI, adicione:
-   ```
-   OPENAI_API_KEY=sk-...
-   SECRET_KEY=generate-random-string-here
-   ADMIN_USERNAME=admin
-   ADMIN_PASSWORD=senha-segura
-   ENVIRONMENT=production
-   DEBUG=false
-   ALLOWED_ORIGINS=https://seu-frontend.netlify.app
-   ```
-
-5. **Deploy**
-   - Railway fará deploy automaticamente
-   - Aguarde build concluir (~3-5 min)
-   - Acesse URL gerada
-
-### Verificar Deploy
+## 💬 Exemplo de Uso
 
 ```bash
-# Health check
-curl https://seu-app.railway.app/health
-
-# Deve retornar:
-{
-  "status": "ok",
-  "version": "1.0.0",
-  "environment": "production"
-}
+# Enviar mensagem para o agente
+curl -X POST https://seu-projeto.up.railway.app/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_id": "00000000-0000-0000-0000-000000000001",
+    "user_identifier": "cliente@email.com",
+    "message": "Preciso de informações sobre produtos"
+  }'
 ```
 
-## 📚 API Documentation
-
-Após iniciar, acesse:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
-### Endpoints Principais
-
-#### Agents
-```bash
-# Criar agente
-POST /api/agents/
-{
-  "name": "Vendedor Bot",
-  "system_prompt": "Você é um vendedor...",
-  "model": "gpt-4o-mini",
-  "temperature": 0.7
-}
-
-# Listar agentes
-GET /api/agents/
-
-# Buscar agente
-GET /api/agents/{agent_id}
-
-# Atualizar agente
-PUT /api/agents/{agent_id}
-
-# Deletar agente
-DELETE /api/agents/{agent_id}
-```
-
-#### Chat
-```bash
-# Enviar mensagem
-POST /api/chat/
-{
-  "agent_id": "uuid",
-  "user_identifier": "user@email.com",
-  "message": "Olá!",
-  "channel": "web"
-}
-
-# Listar conversas
-GET /api/chat/conversations
-
-# Buscar conversa com mensagens
-GET /api/chat/conversations/{conversation_id}
-```
-
-## 🔧 Configuração Avançada
-
-### Custos OpenAI
-
-O sistema calcula automaticamente custos:
-
-```python
-# GPT-4o-mini (default)
-Input: $0.15 / 1M tokens
-Output: $0.60 / 1M tokens
-
-# Custo médio por conversa: ~$0.001-0.005
-```
-
-### WhatsApp (Twilio)
-
-1. Crie conta: https://www.twilio.com
-2. Configure WhatsApp Sandbox
-3. Adicione variáveis:
-```env
-TWILIO_ACCOUNT_SID=AC...
-TWILIO_AUTH_TOKEN=...
-TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
-```
-4. Configure webhook: `https://seu-app.railway.app/api/webhooks/whatsapp`
-
-### Email (MailerSend)
-
-1. Crie conta: https://www.mailersend.com
-2. Verifique domínio
-3. Adicione variáveis:
-```env
-MAILERSEND_API_KEY=...
-MAILERSEND_FROM_EMAIL=noreply@yourdomain.com
-```
-
-## 🧪 Testes
-
-```bash
-# Executar testes
-pytest
-
-# Com coverage
-pytest --cov=app tests/
-
-# Apenas unitários
-pytest tests/unit/
-```
-
-## 📊 Monitoramento
-
-### Logs
-```bash
-# Railway
-railway logs
-
-# Local
-tail -f logs/app.log
-```
-
-### Métricas
-
-Acesse `/health` para status:
+Resposta:
 ```json
 {
-  "status": "ok",
-  "version": "1.0.0",
-  "environment": "production"
+  "conversation_id": "uuid-da-conversa",
+  "response": "Olá! Fico feliz em ajudar com informações sobre nossos produtos...",
+  "tokens": 45,
+  "cost": 0.000123,
+  "processing_time": 0.89
 }
 ```
 
-## 🔐 Segurança
+## 🏗️ Arquitetura
 
-- ✅ JWT para autenticação
-- ✅ Variáveis sensíveis em .env
-- ✅ CORS configurado
-- ✅ Rate limiting (Railway)
-- ✅ SQL injection protection (SQLAlchemy)
-
-## 🛠️ Troubleshooting
-
-### Build falha no Railway
-```bash
-# Erro: mailersend version not found
-# Solução: requirements.txt já corrigido (2.0.0)
+```
+ai-agent-backend-v2/
+├── main.py                          # Aplicação FastAPI
+├── init_database.sql                # Script de inicialização do banco
+├── app/
+│   ├── api/
+│   │   ├── health.py               # Health checks
+│   │   ├── agents.py               # CRUD de agentes
+│   │   └── conversations.py        # Gestão de conversas
+│   ├── core/
+│   │   └── database.py             # Conexão + Inicialização automática
+│   ├── models/
+│   │   └── __init__.py             # SQLAlchemy models
+│   └── services/
+│       ├── llm_service.py          # Integração OpenAI
+│       └── conversation_service.py # Lógica de conversação
+├── requirements.txt                # Dependências Python
+├── Procfile                        # Comando de start
+└── railway.json                    # Configuração Railway
 ```
 
-### Database connection error
-```bash
-# Verifique DATABASE_URL no Railway
-# Deve ser: postgresql://...
-```
+## 🛠️ Stack Tecnológico
 
-### OpenAI API timeout
-```bash
-# Aumente timeout ou use modelo mais rápido
-# gpt-4o-mini é o mais rápido
-```
-
-## 📈 Roadmap
-
-### ✅ Fase 1 (2 semanas) - ATUAL
-- [x] Core API
-- [x] Sistema de agentes
-- [x] Conversas persistentes
-- [x] Integração OpenAI
-- [x] Deploy Railway
-
-### 🚧 Fase 2 (3-4 semanas)
-- [ ] Sistema RAG (Qdrant)
-- [ ] Upload de documentos
-- [ ] WhatsApp webhook
-- [ ] Email send/receive
-- [ ] Analytics dashboard
-- [ ] CRM integration
-
-### 🔮 Fase 3 (6-8 semanas)
-- [ ] Multi-tenancy
-- [ ] Billing system
-- [ ] White-label
-- [ ] Marketplace
-- [ ] Advanced analytics
+- **Framework**: FastAPI 0.109.0
+- **Database**: PostgreSQL 15
+- **ORM**: SQLAlchemy 2.0
+- **LLM**: OpenAI GPT-4o-mini
+- **Hosting**: Railway
 
 ## 💰 Custos Estimados
 
-### Desenvolvimento (One-time)
-- Setup: €1.800
+- **Railway**: €5-20/mês (database + hosting)
+- **OpenAI API**: €0.15 por 1M tokens input (GPT-4o-mini)
+- **Total para ~5.000 mensagens/mês**: €10-30/mês
 
-### Operacional (Mensal - 5k msgs)
-| Serviço | Custo |
-|---------|-------|
-| Railway Hosting | €20-40 |
-| OpenAI API | €30-80 |
-| Twilio WhatsApp | €20-50 |
-| MailerSend | €0-25 |
-| **Total** | **€70-195/mês** |
+## 📊 Features
 
-## 🤝 Contribuindo
+- [x] API REST completa
+- [x] Inicialização automática do banco
+- [x] Múltiplos agentes
+- [x] Histórico de conversas
+- [x] Cálculo de custos
+- [x] Health checks
+- [x] Documentação Swagger
+- [ ] RAG (Fase 2)
+- [ ] WhatsApp (Fase 2)
+- [ ] Email (Fase 2)
 
-1. Fork o projeto
-2. Crie branch (`git checkout -b feature/amazing`)
-3. Commit (`git commit -m 'Add amazing feature'`)
-4. Push (`git push origin feature/amazing`)
-5. Pull Request
+## 🐛 Troubleshooting
+
+### Erro 500 ao chamar agente
+
+1. Verifique logs no Railway
+2. Confirme `DATABASE_URL` existe
+3. Confirme `OPENAI_API_KEY` está correta
+4. Teste: `curl https://seu-projeto.up.railway.app/health`
+
+### Banco não inicializa
+
+1. Veja logs do primeiro deploy
+2. Procure por "🚀 Primeira execução detectada"
+3. Se necessário, execute `init_database.sql` manualmente no Railway
+
+## 📝 Changelog
+
+### v2.0.0 (Janeiro 2025)
+- Inicialização automática do banco de dados
+- Removida dependência de Railway CLI
+- Adicionados 2 agentes pré-configurados
+- Melhorado sistema de health checks
+- Simplificado processo de deployment
+
+### v1.0.0
+- Release inicial
 
 ## 📄 Licença
 
-Propriedade intelectual exclusiva do cliente.
+Propriedade do cliente. Código não pode ser reutilizado ou comercializado sem autorização.
 
-## 📞 Suporte
+## 👨‍💻 Suporte
 
-- **Issues**: GitHub Issues
-- **Email**: support@yourdomain.com
-- **Docs**: https://docs.yourdomain.com
-
----
-
-**Versão:** 1.0.0  
-**Última atualização:** 2025-01-20  
-**Status:** ✅ Production Ready
+Para suporte técnico, verifique:
+1. Logs no Railway
+2. Documentação Swagger: `/docs`
+3. Health checks: `/health` e `/health/db`

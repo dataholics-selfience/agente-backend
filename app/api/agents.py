@@ -1,123 +1,129 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
-from typing import List
-from uuid import UUID
+"""
+Agents API
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import List, Optional
+import uuid
 
-from app.core.database import get_async_db
+from app.core.database import get_db_dependency
 from app.models import Agent, AgentStatus
-from app.schemas import AgentCreate, AgentUpdate, AgentResponse
 
-router = APIRouter(prefix="/agents", tags=["agents"])
+router = APIRouter()
 
+# Schemas
+class AgentCreate(BaseModel):
+    name: str
+    system_prompt: str
+    model: str = "gpt-4o-mini"
+    temperature: float = 0.7
+    rag_enabled: bool = False
+    whatsapp_enabled: bool = False
+    email_enabled: bool = False
 
-@router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
-async def create_agent(
-    agent_data: AgentCreate,
-    db: AsyncSession = Depends(get_async_db),
-):
-    """Cria um novo agente"""
-    agent = Agent(**agent_data.model_dump())
-    db.add(agent)
-    await db.commit()
-    await db.refresh(agent)
-    return agent
+class AgentUpdate(BaseModel):
+    name: Optional[str] = None
+    system_prompt: Optional[str] = None
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    rag_enabled: Optional[bool] = None
+    whatsapp_enabled: Optional[bool] = None
+    email_enabled: Optional[bool] = None
+    status: Optional[str] = None
 
+class AgentResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    system_prompt: str
+    model: str
+    temperature: float
+    rag_enabled: bool
+    whatsapp_enabled: bool
+    email_enabled: bool
+    status: str
+    created_at: str
+    updated_at: str
+    
+    class Config:
+        from_attributes = True
 
-@router.get("/", response_model=List[AgentResponse])
+# Endpoints
+@router.get("/agents", response_model=List[AgentResponse])
 async def list_agents(
     skip: int = 0,
     limit: int = 100,
-    db: AsyncSession = Depends(get_async_db),
+    db: Session = Depends(get_db_dependency)
 ):
-    """Lista todos os agentes"""
-    result = await db.execute(
-        select(Agent)
-        .where(Agent.status != AgentStatus.ARCHIVED)
-        .offset(skip)
-        .limit(limit)
-    )
-    agents = result.scalars().all()
+    """Listar todos os agentes"""
+    agents = db.query(Agent).offset(skip).limit(limit).all()
     return agents
 
-
-@router.get("/{agent_id}", response_model=AgentResponse)
-async def get_agent(
-    agent_id: UUID,
-    db: AsyncSession = Depends(get_async_db),
-):
-    """Busca agente por ID"""
-    result = await db.execute(
-        select(Agent).where(Agent.id == agent_id)
-    )
-    agent = result.scalar_one_or_none()
+@router.get("/agents/{agent_id}", response_model=AgentResponse)
+async def get_agent(agent_id: uuid.UUID, db: Session = Depends(get_db_dependency)):
+    """Buscar agente por ID"""
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
     
     if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent {agent_id} not found"
-        )
+        raise HTTPException(status_code=404, detail="Agente não encontrado")
     
     return agent
 
+@router.post("/agents", response_model=AgentResponse)
+async def create_agent(agent_data: AgentCreate, db: Session = Depends(get_db_dependency)):
+    """Criar novo agente"""
+    
+    agent = Agent(
+        name=agent_data.name,
+        system_prompt=agent_data.system_prompt,
+        model=agent_data.model,
+        temperature=agent_data.temperature,
+        rag_enabled=agent_data.rag_enabled,
+        whatsapp_enabled=agent_data.whatsapp_enabled,
+        email_enabled=agent_data.email_enabled,
+        status=AgentStatus.active
+    )
+    
+    db.add(agent)
+    db.commit()
+    db.refresh(agent)
+    
+    return agent
 
-@router.put("/{agent_id}", response_model=AgentResponse)
+@router.put("/agents/{agent_id}", response_model=AgentResponse)
 async def update_agent(
-    agent_id: UUID,
+    agent_id: uuid.UUID,
     agent_data: AgentUpdate,
-    db: AsyncSession = Depends(get_async_db),
+    db: Session = Depends(get_db_dependency)
 ):
-    """Atualiza agente"""
-    # Verifica se existe
-    result = await db.execute(
-        select(Agent).where(Agent.id == agent_id)
-    )
-    agent = result.scalar_one_or_none()
+    """Atualizar agente"""
+    
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
     
     if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent {agent_id} not found"
-        )
+        raise HTTPException(status_code=404, detail="Agente não encontrado")
     
-    # Atualiza campos
-    update_data = agent_data.model_dump(exclude_unset=True)
+    # Atualizar campos fornecidos
+    update_data = agent_data.dict(exclude_unset=True)
     
-    await db.execute(
-        update(Agent)
-        .where(Agent.id == agent_id)
-        .values(**update_data)
-    )
-    await db.commit()
+    for field, value in update_data.items():
+        setattr(agent, field, value)
     
-    # Recarrega
-    await db.refresh(agent)
+    db.commit()
+    db.refresh(agent)
+    
     return agent
 
-
-@router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_agent(
-    agent_id: UUID,
-    db: AsyncSession = Depends(get_async_db),
-):
-    """Deleta agente (soft delete)"""
-    result = await db.execute(
-        select(Agent).where(Agent.id == agent_id)
-    )
-    agent = result.scalar_one_or_none()
+@router.delete("/agents/{agent_id}")
+async def delete_agent(agent_id: uuid.UUID, db: Session = Depends(get_db_dependency)):
+    """Deletar agente"""
+    
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
     
     if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent {agent_id} not found"
-        )
+        raise HTTPException(status_code=404, detail="Agente não encontrado")
     
-    # Soft delete
-    await db.execute(
-        update(Agent)
-        .where(Agent.id == agent_id)
-        .values(status=AgentStatus.ARCHIVED)
-    )
-    await db.commit()
+    db.delete(agent)
+    db.commit()
     
-    return None
+    return {"message": "Agente deletado com sucesso"}
