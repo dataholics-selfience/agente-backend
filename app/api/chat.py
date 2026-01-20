@@ -110,7 +110,7 @@ async def get_conversation(
         "user_identifier": conversation.user_identifier,
         "channel": conversation.channel,
         "status": conversation.status,
-        "metadata": conversation.metadata,
+        "extra_data": conversation.extra_data,
         "created_at": conversation.created_at,
         "updated_at": conversation.updated_at,
         "messages": [MessageResponse.model_validate(msg) for msg in messages],

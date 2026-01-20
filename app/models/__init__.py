@@ -65,7 +65,7 @@ class Conversation(Base):
     status = Column(Enum(ConversationStatus), default=ConversationStatus.ACTIVE)
     
     # Metadata
-    metadata = Column(JSON, default={})
+    extra_data = Column(JSON, default={})
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -88,7 +88,7 @@ class Message(Base):
     tokens = Column(Integer, default=0)
     cost = Column(Float, default=0.0)
     processing_time = Column(Float, default=0.0)  # segundos
-    metadata = Column(JSON, default={})
+    extra_data = Column(JSON, default={})
     
     # Timestamp
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -111,7 +111,7 @@ class Document(Base):
     chunks_count = Column(Integer, default=0)
     
     # Metadata
-    metadata = Column(JSON, default={})
+    extra_data = Column(JSON, default={})
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

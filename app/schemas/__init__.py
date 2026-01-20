@@ -56,7 +56,7 @@ class MessageResponse(MessageBase):
     tokens: int
     cost: float
     processing_time: float
-    metadata: Dict[str, Any]
+    extra_data: Dict[str, Any]
     created_at: datetime
     
     class Config:
@@ -77,7 +77,7 @@ class ConversationResponse(ConversationBase):
     id: UUID
     agent_id: UUID
     status: str
-    metadata: Dict[str, Any]
+    extra_data: Dict[str, Any]
     created_at: datetime
     updated_at: datetime
     

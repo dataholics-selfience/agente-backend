@@ -178,7 +178,7 @@ class ConversationService:
             tokens=llm_response["tokens"],
             cost=llm_response["cost"],
             processing_time=llm_response["processing_time"],
-            metadata={
+            extra_data={
                 "model": llm_response["model"],
                 "input_tokens": llm_response["input_tokens"],
                 "output_tokens": llm_response["output_tokens"],
