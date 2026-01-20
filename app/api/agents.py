@@ -1,8 +1,9 @@
 """Agents API"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
+from datetime import datetime
 import uuid
 
 from app.core.database import get_db
@@ -17,16 +18,16 @@ class AgentCreate(BaseModel):
     temperature: float = 0.7
 
 class AgentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: uuid.UUID
     name: str
     system_prompt: str
     model: str
     temperature: float
     status: str
-    created_at: str
-    
-    class Config:
-        from_attributes = True
+    created_at: datetime
+    updated_at: datetime
 
 @router.get("/agents", response_model=List[AgentResponse])
 async def list_agents(db: Session = Depends(get_db)):
