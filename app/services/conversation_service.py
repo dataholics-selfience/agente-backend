@@ -1,16 +1,13 @@
-"""
-Conversation Service
-"""
+"""Conversation Service"""
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from typing import List, Dict, Optional
+from typing import List, Dict
 import uuid
 
 from app.models import Agent, Conversation, Message, MessageRole, ConversationStatus
 from app.services.llm_service import LLMService
 
 class ConversationService:
-    """Serviço para gerenciar conversas"""
     
     @staticmethod
     def get_or_create_conversation(
@@ -19,9 +16,6 @@ class ConversationService:
         user_identifier: str,
         channel: str = "web"
     ) -> Conversation:
-        """Busca conversa ativa ou cria nova"""
-        
-        # Buscar conversa ativa existente
         conversation = db.query(Conversation).filter(
             Conversation.agent_id == agent_id,
             Conversation.user_identifier == user_identifier,
@@ -32,7 +26,6 @@ class ConversationService:
         if conversation:
             return conversation
         
-        # Criar nova conversa
         conversation = Conversation(
             agent_id=agent_id,
             user_identifier=user_identifier,
@@ -52,13 +45,10 @@ class ConversationService:
         conversation_id: uuid.UUID,
         limit: int = 20
     ) -> List[Message]:
-        """Busca histórico de mensagens da conversa"""
-        
         messages = db.query(Message).filter(
             Message.conversation_id == conversation_id
         ).order_by(desc(Message.created_at)).limit(limit).all()
         
-        # Retornar em ordem cronológica
         return list(reversed(messages))
     
     @staticmethod
@@ -69,31 +59,15 @@ class ConversationService:
         user_message: str,
         channel: str = "web"
     ) -> Dict:
-        """
-        Processa mensagem do usuário e retorna resposta do agente
-        
-        Returns:
-            {
-                "conversation_id": UUID,
-                "response": str,
-                "tokens": int,
-                "cost": float,
-                "processing_time": float
-            }
-        """
-        
-        # Buscar agente
         agent = db.query(Agent).filter(Agent.id == agent_id).first()
         
         if not agent:
             raise ValueError(f"Agente {agent_id} não encontrado")
         
-        # Buscar/criar conversa
         conversation = ConversationService.get_or_create_conversation(
             db, agent_id, user_identifier, channel
         )
         
-        # Salvar mensagem do usuário
         user_msg = Message(
             conversation_id=conversation.id,
             role=MessageRole.user,
@@ -104,12 +78,10 @@ class ConversationService:
         db.add(user_msg)
         db.commit()
         
-        # Buscar histórico
         history = ConversationService.get_conversation_history(
             db, conversation.id, limit=20
         )
         
-        # Montar contexto para LLM
         messages = [
             {"role": "system", "content": agent.system_prompt}
         ]
@@ -120,14 +92,12 @@ class ConversationService:
                 "content": msg.content
             })
         
-        # Gerar resposta
         llm_response = await LLMService.generate_response(
             messages=messages,
             model=agent.model,
             temperature=agent.temperature
         )
         
-        # Salvar resposta do assistente
         assistant_msg = Message(
             conversation_id=conversation.id,
             role=MessageRole.assistant,

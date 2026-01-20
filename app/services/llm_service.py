@@ -1,30 +1,33 @@
 """
-LLM Service - OpenAI Integration
+LLM Service - OpenAI com LAZY LOADING
 """
 import os
 import time
-from openai import OpenAI
 from typing import List, Dict
 
-# Inicializar cliente OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+_client = None
+
+def get_openai_client():
+    """Lazy loading do cliente OpenAI"""
+    global _client
+    if _client is None:
+        from openai import OpenAI
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY não configurada!")
+        _client = OpenAI(api_key=api_key)
+    return _client
 
 class LLMService:
-    """Serviço para interação com modelos de linguagem"""
     
     @staticmethod
     def calculate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-        """Calcula custo da chamada baseado no modelo"""
-        
-        # Preços por 1M tokens (Janeiro 2025)
         pricing = {
             "gpt-4o-mini": {"input": 0.150, "output": 0.600},
             "gpt-4o": {"input": 2.50, "output": 10.00},
-            "gpt-4-turbo": {"input": 10.00, "output": 30.00},
         }
         
         model_pricing = pricing.get(model, pricing["gpt-4o-mini"])
-        
         input_cost = (input_tokens / 1_000_000) * model_pricing["input"]
         output_cost = (output_tokens / 1_000_000) * model_pricing["output"]
         
@@ -37,21 +40,11 @@ class LLMService:
         temperature: float = 0.7,
         max_tokens: int = 1000
     ) -> Dict:
-        """
-        Gera resposta usando OpenAI
-        
-        Returns:
-            {
-                "content": str,
-                "tokens": int,
-                "cost": float,
-                "processing_time": float
-            }
-        """
-        
         start_time = time.time()
         
         try:
+            client = get_openai_client()
+            
             response = client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -61,13 +54,11 @@ class LLMService:
             
             processing_time = time.time() - start_time
             
-            # Extrair dados da resposta
             content = response.choices[0].message.content
             input_tokens = response.usage.prompt_tokens
             output_tokens = response.usage.completion_tokens
             total_tokens = response.usage.total_tokens
             
-            # Calcular custo
             cost = LLMService.calculate_cost(model, input_tokens, output_tokens)
             
             return {
@@ -81,4 +72,4 @@ class LLMService:
             }
             
         except Exception as e:
-            raise Exception(f"Erro ao chamar OpenAI: {str(e)}")
+            raise Exception(f"Erro OpenAI: {str(e)}")

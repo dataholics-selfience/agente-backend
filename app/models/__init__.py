@@ -1,6 +1,4 @@
-"""
-SQLAlchemy Models
-"""
+"""SQLAlchemy Models"""
 from sqlalchemy import Column, String, Float, Boolean, Integer, Text, DateTime, ForeignKey, Enum
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
@@ -9,7 +7,6 @@ import enum
 
 from app.core.database import Base
 
-# Enums
 class AgentStatus(str, enum.Enum):
     active = "active"
     inactive = "inactive"
@@ -25,7 +22,6 @@ class MessageRole(str, enum.Enum):
     assistant = "assistant"
     system = "system"
 
-# Models
 class Agent(Base):
     __tablename__ = "agents"
     
