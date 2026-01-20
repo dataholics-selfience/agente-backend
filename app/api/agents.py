@@ -1,107 +1,123 @@
-"""
-Agents API Endpoints
-"""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, delete
 from typing import List
 from uuid import UUID
-import uuid
 
-from app.core.database import get_db
-from app.models import Agent
+from app.core.database import get_async_db
+from app.models import Agent, AgentStatus
 from app.schemas import AgentCreate, AgentUpdate, AgentResponse
 
-router = APIRouter()
+router = APIRouter(prefix="/agents", tags=["agents"])
 
 
-@router.post("/", response_model=AgentResponse, status_code=201)
-def create_agent(
+@router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
+async def create_agent(
     agent_data: AgentCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """
-    Cria um novo agente
-    """
-    agent = Agent(
-        id=uuid.uuid4(),
-        **agent_data.model_dump()
-    )
-    
+    """Cria um novo agente"""
+    agent = Agent(**agent_data.model_dump())
     db.add(agent)
-    db.commit()
-    db.refresh(agent)
-    
+    await db.commit()
+    await db.refresh(agent)
     return agent
 
 
 @router.get("/", response_model=List[AgentResponse])
-def list_agents(
+async def list_agents(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """
-    Lista todos os agentes
-    """
-    agents = db.query(Agent).offset(skip).limit(limit).all()
+    """Lista todos os agentes"""
+    result = await db.execute(
+        select(Agent)
+        .where(Agent.status != AgentStatus.ARCHIVED)
+        .offset(skip)
+        .limit(limit)
+    )
+    agents = result.scalars().all()
     return agents
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)
-def get_agent(
+async def get_agent(
     agent_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """
-    Busca um agente específico
-    """
-    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    """Busca agente por ID"""
+    result = await db.execute(
+        select(Agent).where(Agent.id == agent_id)
+    )
+    agent = result.scalar_one_or_none()
     
     if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent {agent_id} not found"
+        )
     
     return agent
 
 
 @router.put("/{agent_id}", response_model=AgentResponse)
-def update_agent(
+async def update_agent(
     agent_id: UUID,
     agent_data: AgentUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """
-    Atualiza um agente
-    """
-    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    """Atualiza agente"""
+    # Verifica se existe
+    result = await db.execute(
+        select(Agent).where(Agent.id == agent_id)
+    )
+    agent = result.scalar_one_or_none()
     
     if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent {agent_id} not found"
+        )
     
-    # Atualizar apenas campos fornecidos
+    # Atualiza campos
     update_data = agent_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(agent, field, value)
     
-    db.commit()
-    db.refresh(agent)
+    await db.execute(
+        update(Agent)
+        .where(Agent.id == agent_id)
+        .values(**update_data)
+    )
+    await db.commit()
     
+    # Recarrega
+    await db.refresh(agent)
     return agent
 
 
-@router.delete("/{agent_id}", status_code=204)
-def delete_agent(
+@router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_agent(
     agent_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """
-    Soft delete de um agente (marca como inativo)
-    """
-    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    """Deleta agente (soft delete)"""
+    result = await db.execute(
+        select(Agent).where(Agent.id == agent_id)
+    )
+    agent = result.scalar_one_or_none()
     
     if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent {agent_id} not found"
+        )
     
-    agent.is_active = False
-    db.commit()
+    # Soft delete
+    await db.execute(
+        update(Agent)
+        .where(Agent.id == agent_id)
+        .values(status=AgentStatus.ARCHIVED)
+    )
+    await db.commit()
     
     return None

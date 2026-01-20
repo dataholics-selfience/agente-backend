@@ -1,262 +1,209 @@
-"""
-Conversation Service - Gestão de conversas
-"""
-from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from typing import Optional, Dict, List
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc
+from typing import Optional, List, Dict
 from uuid import UUID
-import uuid
-from datetime import datetime
+import time
 
-from app.models import Agent, Conversation, Message
-from app.services.llm_service import llm_service
-from loguru import logger
+from app.models import Conversation, Message, Agent, MessageRole
+from app.services.llm_service import get_llm_service
+from app.services.rag_service import get_rag_service
 
 
 class ConversationService:
-    """Serviço para gerir conversas"""
+    def __init__(self):
+        self.llm_service = get_llm_service()
+        self.rag_service = get_rag_service()
     
-    async def send_message(
+    async def get_or_create_conversation(
         self,
-        db: Session,
+        db: AsyncSession,
         agent_id: UUID,
         user_identifier: str,
-        message: str,
         channel: str = "web",
-        metadata: Optional[Dict] = None,
-    ) -> Dict:
-        """
-        Envia mensagem e recebe resposta do agente
-        
-        Args:
-            db: Sessão do banco
-            agent_id: ID do agente
-            user_identifier: Identificador do usuário (email, phone, session)
-            message: Mensagem do usuário
-            channel: Canal (web, whatsapp, email)
-            metadata: Metadata adicional
-        
-        Returns:
-            {
-                "conversation_id": UUID,
-                "message_id": UUID,
-                "response": str,
-                "tokens_used": int,
-                "cost": float,
-                "agent": {...}
-            }
-        """
-        try:
-            # 1. Buscar agente
-            agent = db.query(Agent).filter(Agent.id == agent_id).first()
-            if not agent:
-                raise ValueError(f"Agent {agent_id} not found")
-            
-            if not agent.is_active:
-                raise ValueError(f"Agent {agent_id} is not active")
-            
-            # 2. Buscar ou criar conversa
-            conversation = self._get_or_create_conversation(
-                db, agent_id, user_identifier, channel
-            )
-            
-            # 3. Salvar mensagem do usuário
-            user_message = Message(
-                id=uuid.uuid4(),
-                conversation_id=conversation.id,
-                role="user",
-                content=message,
-                metadata=metadata or {},
-            )
-            db.add(user_message)
-            db.commit()
-            
-            # 4. Buscar histórico
-            history = self._get_conversation_history(db, conversation.id, limit=20)
-            
-            # 5. Montar contexto para LLM
-            messages = self._build_llm_context(agent, history)
-            
-            # 6. Chamar LLM
-            logger.info(f"Calling LLM for conversation {conversation.id}")
-            llm_response = await llm_service.chat(
-                messages=messages,
-                model=agent.model,
-                temperature=agent.temperature,
-            )
-            
-            # 7. Salvar resposta do assistente
-            assistant_message = Message(
-                id=uuid.uuid4(),
-                conversation_id=conversation.id,
-                role="assistant",
-                content=llm_response["content"],
-                tokens_used=llm_response["tokens_used"],
-                cost=llm_response["cost"],
-                model=llm_response["model"],
-                metadata={
-                    "input_tokens": llm_response["input_tokens"],
-                    "output_tokens": llm_response["output_tokens"],
-                    "time": llm_response["time"],
-                },
-            )
-            db.add(assistant_message)
-            
-            # 8. Atualizar timestamp da conversa
-            conversation.updated_at = datetime.utcnow()
-            
-            db.commit()
-            db.refresh(assistant_message)
-            
-            logger.info(
-                f"Conversation {conversation.id}: "
-                f"{llm_response['tokens_used']} tokens, "
-                f"${llm_response['cost']:.4f}"
-            )
-            
-            return {
-                "conversation_id": str(conversation.id),
-                "message_id": str(assistant_message.id),
-                "response": llm_response["content"],
-                "tokens_used": llm_response["tokens_used"],
-                "cost": llm_response["cost"],
-                "agent": {
-                    "id": str(agent.id),
-                    "name": agent.name,
-                    "model": agent.model,
-                },
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in send_message: {e}")
-            db.rollback()
-            raise
-    
-    def _get_or_create_conversation(
-        self,
-        db: Session,
-        agent_id: UUID,
-        user_identifier: str,
-        channel: str,
+        conversation_id: Optional[UUID] = None,
     ) -> Conversation:
         """Busca conversa existente ou cria nova"""
         
-        # Buscar conversa ativa
-        conversation = (
-            db.query(Conversation)
-            .filter(
+        if conversation_id:
+            result = await db.execute(
+                select(Conversation).where(Conversation.id == conversation_id)
+            )
+            conversation = result.scalar_one_or_none()
+            if conversation:
+                return conversation
+        
+        # Busca conversa ativa do mesmo user com mesmo agente
+        result = await db.execute(
+            select(Conversation)
+            .where(
                 Conversation.agent_id == agent_id,
                 Conversation.user_identifier == user_identifier,
                 Conversation.channel == channel,
                 Conversation.status == "active",
             )
-            .first()
+            .order_by(desc(Conversation.updated_at))
         )
+        conversation = result.scalar_one_or_none()
         
         if conversation:
             return conversation
         
-        # Criar nova conversa
+        # Cria nova conversa
         conversation = Conversation(
-            id=uuid.uuid4(),
             agent_id=agent_id,
             user_identifier=user_identifier,
             channel=channel,
             status="active",
         )
         db.add(conversation)
-        db.commit()
-        db.refresh(conversation)
+        await db.commit()
+        await db.refresh(conversation)
         
-        logger.info(f"Created new conversation {conversation.id}")
         return conversation
     
-    def _get_conversation_history(
+    async def get_conversation_history(
         self,
-        db: Session,
+        db: AsyncSession,
         conversation_id: UUID,
         limit: int = 20,
-    ) -> List[Message]:
-        """Busca histórico de mensagens"""
+    ) -> List[Dict[str, str]]:
+        """
+        Busca histórico de mensagens e formata para LLM
         
-        messages = (
-            db.query(Message)
-            .filter(Message.conversation_id == conversation_id)
+        Returns:
+            Lista no formato [{"role": "user", "content": "..."}, ...]
+        """
+        result = await db.execute(
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
             .order_by(desc(Message.created_at))
             .limit(limit)
-            .all()
+        )
+        messages = result.scalars().all()
+        
+        # Inverte ordem (mais antigas primeiro)
+        messages = list(reversed(messages))
+        
+        # Formata para LLM
+        return [
+            {"role": msg.role.value, "content": msg.content}
+            for msg in messages
+        ]
+    
+    async def send_message(
+        self,
+        db: AsyncSession,
+        agent_id: UUID,
+        user_identifier: str,
+        content: str,
+        channel: str = "web",
+        conversation_id: Optional[UUID] = None,
+    ) -> Dict:
+        """
+        Processa mensagem do usuário e gera resposta do agente
+        
+        Returns:
+            {
+                "conversation_id": UUID,
+                "user_message": Message,
+                "assistant_message": Message,
+            }
+        """
+        start_time = time.time()
+        
+        # 1. Busca agente
+        result = await db.execute(
+            select(Agent).where(Agent.id == agent_id)
+        )
+        agent = result.scalar_one_or_none()
+        
+        if not agent:
+            raise ValueError(f"Agent {agent_id} not found")
+        
+        # 2. Busca ou cria conversa
+        conversation = await self.get_or_create_conversation(
+            db, agent_id, user_identifier, channel, conversation_id
         )
         
-        # Reverter para ordem cronológica
-        return list(reversed(messages))
-    
-    def _build_llm_context(
-        self,
-        agent: Agent,
-        history: List[Message],
-    ) -> List[Dict[str, str]]:
-        """Monta contexto para enviar ao LLM"""
+        # 3. Salva mensagem do usuário
+        user_message = Message(
+            conversation_id=conversation.id,
+            role=MessageRole.USER,
+            content=content,
+        )
+        db.add(user_message)
+        await db.commit()
+        await db.refresh(user_message)
         
+        # 4. Busca histórico
+        history = await self.get_conversation_history(db, conversation.id, limit=20)
+        
+        # 5. Prepara contexto RAG (se habilitado)
+        rag_context = ""
+        if agent.rag_enabled:
+            rag_context = await self.rag_service.search_context(
+                agent_id=agent.id,
+                query=content,
+                top_k=3,
+            )
+        
+        # 6. Monta mensagens para LLM
         messages = []
         
-        # 1. System prompt
+        # System prompt
+        system_content = agent.system_prompt
+        if rag_context:
+            system_content += f"\n\nKnowledge Base:\n{rag_context}"
+        
         messages.append({
             "role": "system",
-            "content": agent.system_prompt,
+            "content": system_content,
         })
         
-        # 2. Histórico
-        for msg in history:
-            if msg.role in ["user", "assistant"]:
-                messages.append({
-                    "role": msg.role,
-                    "content": msg.content,
-                })
+        # Histórico
+        messages.extend(history)
         
-        # TODO: Adicionar RAG context aqui se agent.rag_enabled
-        
-        return messages
-    
-    def get_conversation(
-        self,
-        db: Session,
-        conversation_id: UUID,
-    ) -> Optional[Dict]:
-        """Busca detalhes de uma conversa"""
-        
-        conversation = (
-            db.query(Conversation)
-            .filter(Conversation.id == conversation_id)
-            .first()
+        # 7. Chama LLM
+        llm_response = self.llm_service.chat(
+            messages=messages,
+            model=agent.model,
+            temperature=agent.temperature,
         )
         
-        if not conversation:
-            return None
+        # 8. Salva resposta do assistente
+        assistant_message = Message(
+            conversation_id=conversation.id,
+            role=MessageRole.ASSISTANT,
+            content=llm_response["content"],
+            tokens=llm_response["tokens"],
+            cost=llm_response["cost"],
+            processing_time=llm_response["processing_time"],
+            metadata={
+                "model": llm_response["model"],
+                "input_tokens": llm_response["input_tokens"],
+                "output_tokens": llm_response["output_tokens"],
+            },
+        )
+        db.add(assistant_message)
+        await db.commit()
+        await db.refresh(assistant_message)
         
-        messages = self._get_conversation_history(db, conversation_id, limit=100)
+        total_time = time.time() - start_time
         
         return {
-            "id": str(conversation.id),
-            "agent_id": str(conversation.agent_id),
-            "user_identifier": conversation.user_identifier,
-            "channel": conversation.channel,
-            "status": conversation.status,
-            "created_at": conversation.created_at.isoformat(),
-            "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
-            "message_count": len(messages),
-            "messages": [
-                {
-                    "id": str(msg.id),
-                    "role": msg.role,
-                    "content": msg.content,
-                    "tokens_used": msg.tokens_used,
-                    "cost": msg.cost,
-                    "created_at": msg.created_at.isoformat(),
-                }
-                for msg in messages
-            ],
+            "conversation_id": conversation.id,
+            "user_message": user_message,
+            "assistant_message": assistant_message,
+            "total_processing_time": total_time,
         }
 
 
-# Instância global
-conversation_service = ConversationService()
+# Singleton
+_conversation_service: Optional[ConversationService] = None
+
+
+def get_conversation_service() -> ConversationService:
+    global _conversation_service
+    if _conversation_service is None:
+        _conversation_service = ConversationService()
+    return _conversation_service

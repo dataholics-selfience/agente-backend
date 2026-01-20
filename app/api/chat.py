@@ -1,82 +1,119 @@
-"""
-Chat API Endpoints
-"""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc
+from typing import List
 from uuid import UUID
 
-from app.core.database import get_db
-from app.schemas import ChatRequest, ChatResponse, ConversationResponse
-from app.services.conversation_service import conversation_service
+from app.core.database import get_async_db
+from app.models import Conversation, Message
+from app.schemas import (
+    ChatRequest,
+    ChatResponse,
+    MessageResponse,
+    ConversationResponse,
+    ConversationWithMessages,
+)
+from app.services import get_conversation_service
 
-router = APIRouter()
+router = APIRouter(prefix="/chat", tags=["chat"])
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/", response_model=ChatResponse)
 async def send_message(
     request: ChatRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
-    Envia mensagem para um agente e recebe resposta
-    
-    - **agent_id**: ID do agente (UUID)
-    - **user_identifier**: Email, telefone ou session ID
-    - **message**: Mensagem do usuário
-    - **channel**: Canal (web, whatsapp, email)
+    Envia mensagem para o agente e recebe resposta
     """
+    conversation_service = get_conversation_service()
+    
     try:
-        response = await conversation_service.send_message(
+        result = await conversation_service.send_message(
             db=db,
             agent_id=request.agent_id,
             user_identifier=request.user_identifier,
-            message=request.message,
+            content=request.message,
             channel=request.channel,
-            metadata=request.metadata,
+            conversation_id=request.conversation_id,
         )
         
-        return response
-        
+        return ChatResponse(
+            conversation_id=result["conversation_id"],
+            message=MessageResponse.model_validate(result["user_message"]),
+            agent_response=MessageResponse.model_validate(result["assistant_message"]),
+        )
+    
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        print(f"Chat error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
 
 
-@router.get("/conversations/{conversation_id}", response_model=ConversationResponse)
+@router.get("/conversations", response_model=List[ConversationResponse])
+async def list_conversations(
+    agent_id: UUID = None,
+    skip: int = 0,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Lista conversas"""
+    query = select(Conversation).order_by(desc(Conversation.updated_at))
+    
+    if agent_id:
+        query = query.where(Conversation.agent_id == agent_id)
+    
+    query = query.offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    conversations = result.scalars().all()
+    
+    return conversations
+
+
+@router.get("/conversations/{conversation_id}", response_model=ConversationWithMessages)
 async def get_conversation(
     conversation_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """
-    Busca detalhes de uma conversa incluindo histórico de mensagens
-    
-    - **conversation_id**: ID da conversa (UUID)
-    """
-    conversation = conversation_service.get_conversation(db, conversation_id)
+    """Busca conversa com mensagens"""
+    result = await db.execute(
+        select(Conversation).where(Conversation.id == conversation_id)
+    )
+    conversation = result.scalar_one_or_none()
     
     if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found"
+        )
     
-    return conversation
-
-
-@router.get("/conversations/{conversation_id}/messages")
-async def get_messages(
-    conversation_id: UUID,
-    db: Session = Depends(get_db),
-):
-    """
-    Busca mensagens de uma conversa
+    # Busca mensagens
+    messages_result = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at)
+    )
+    messages = messages_result.scalars().all()
     
-    - **conversation_id**: ID da conversa (UUID)
-    """
-    conversation = conversation_service.get_conversation(db, conversation_id)
-    
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    
-    return {
-        "conversation_id": conversation["id"],
-        "messages": conversation["messages"],
+    # Formata resposta
+    conversation_dict = {
+        "id": conversation.id,
+        "agent_id": conversation.agent_id,
+        "user_identifier": conversation.user_identifier,
+        "channel": conversation.channel,
+        "status": conversation.status,
+        "metadata": conversation.metadata,
+        "created_at": conversation.created_at,
+        "updated_at": conversation.updated_at,
+        "messages": [MessageResponse.model_validate(msg) for msg in messages],
     }
+    
+    return ConversationWithMessages(**conversation_dict)

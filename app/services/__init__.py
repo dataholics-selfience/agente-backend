@@ -1,10 +1,12 @@
-"""Services module"""
-from app.services.llm_service import llm_service, LLMService
-from app.services.conversation_service import conversation_service, ConversationService
+from .llm_service import LLMService, get_llm_service
+from .conversation_service import ConversationService, get_conversation_service
+from .rag_service import RAGService, get_rag_service
 
 __all__ = [
-    "llm_service",
     "LLMService",
-    "conversation_service",
+    "get_llm_service",
     "ConversationService",
+    "get_conversation_service",
+    "RAGService",
+    "get_rag_service",
 ]
