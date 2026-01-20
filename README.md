@@ -1,177 +1,135 @@
-# 🤖 AI Agent Backend v2.0
+# 🤖 AI Agent Backend v3.0 - RAILWAY EDITION
 
-Sistema de Agentes Conversacionais Inteligentes com inicialização automática de banco de dados.
+**Backend de agentes de IA com SQL inline para funcionamento garantido no Railway**
 
-## ✨ Novidades da Versão 2.0
+## 🆕 Novidade v3.0
 
-- ✅ **Inicialização automática do banco de dados** (sem necessidade de Railway CLI)
-- ✅ **Deploy simplificado** (apenas conectar PostgreSQL e configurar variáveis)
-- ✅ **2 agentes pré-configurados** (Vendedor Inteligente e Suporte Técnico)
-- ✅ **API REST completa** com documentação Swagger automática
-- ✅ **Cálculo automático de custos** por conversa
-- ✅ **Health checks** para monitoramento
+✅ **SQL embutido no código** - Não depende de arquivos externos  
+✅ **Funciona 100% no Railway** - Testado e validado  
+✅ **Inicialização automática** - Cria tabelas no primeiro uso  
+✅ **2 agentes pré-configurados** - Prontos para usar  
 
-## 🚀 Deploy Rápido (5 minutos)
+---
 
-### 1. Criar conta no Railway
-https://railway.app (grátis)
+## 🚀 DEPLOY RÁPIDO
 
-### 2. Criar novo projeto
-- Clique em "New Project"
-- Selecione "Deploy from GitHub repo"
-- Conecte este repositório
-
-### 3. Adicionar PostgreSQL
-- No projeto, clique "+ New"
-- Selecione "Database" → "Add PostgreSQL"
-
-### 4. Configurar variáveis
-Na aba "Variables" do serviço backend, adicione:
-
-```
-OPENAI_API_KEY=sk-proj-xxxxxxxxxxxx
-PORT=8000
-```
-
-### 5. Deploy automático!
-Railway fará deploy automaticamente. Aguarde ~2 minutos.
-
-### 6. Testar
 ```bash
+# 1. Extrair
+tar -xzf ai-agent-backend-v3.tar.gz
+cd ai-agent-backend-v3
+
+# 2. Git
+git init && git add . && git commit -m "v3"
+
+# 3. Railway
+railway init
+railway up
+
+# 4. Adicionar PostgreSQL
+railway add postgresql
+
+# 5. Configurar
+railway variables set OPENAI_API_KEY=sk-proj-xxx
+
+# 6. Pronto!
+```
+
+---
+
+## 📖 DOCUMENTAÇÃO
+
+Leia o **README_RAILWAY.md** para:
+- Guia passo a passo detalhado
+- Solução de problemas
+- Validação de funcionamento
+- Alternativas de banco de dados
+
+---
+
+## 🔧 MUDANÇAS TÉCNICAS (v2 → v3)
+
+### Problema Identificado
+```
+ERROR: relation "agents" does not exist
+```
+
+### Causa
+Railway não conseguia ler arquivo `init_database.sql` externo durante startup.
+
+### Solução
+SQL agora está embutido direto em `app/core/database.py`:
+
+```python
+INIT_SQL = """
+CREATE TABLE IF NOT EXISTS agents (...)
+CREATE TABLE IF NOT EXISTS conversations (...)
+...
+"""
+
+def init_database():
+    conn.execute(text(INIT_SQL))  # ← Executa SQL inline
+```
+
+---
+
+## ✅ VALIDAÇÃO
+
+Após deploy, rode:
+
+```bash
+# 1. Health check
 curl https://seu-projeto.up.railway.app/health
-```
 
-## 📚 Documentação Completa
+# 2. Listar agentes
+curl https://seu-projeto.up.railway.app/api/agents
 
-Veja [RAILWAY_DEPLOY_GUIDE.md](RAILWAY_DEPLOY_GUIDE.md) para instruções detalhadas.
-
-## 🔌 API Endpoints
-
-### Health
-- `GET /health` - Status geral
-- `GET /health/db` - Status do banco de dados
-
-### Agentes
-- `GET /api/agents` - Listar todos
-- `GET /api/agents/{id}` - Buscar por ID
-- `POST /api/agents` - Criar novo
-- `PUT /api/agents/{id}` - Atualizar
-- `DELETE /api/agents/{id}` - Deletar
-
-### Conversas
-- `POST /api/chat` - Enviar mensagem
-- `GET /api/conversations` - Listar conversas
-- `GET /api/conversations/{id}` - Detalhes
-- `GET /api/conversations/{id}/messages` - Histórico
-
-## 💬 Exemplo de Uso
-
-```bash
-# Enviar mensagem para o agente
+# 3. Conversar
 curl -X POST https://seu-projeto.up.railway.app/api/chat \
   -H "Content-Type: application/json" \
   -d '{
     "agent_id": "00000000-0000-0000-0000-000000000001",
-    "user_identifier": "cliente@email.com",
-    "message": "Preciso de informações sobre produtos"
+    "user_identifier": "test@email.com",
+    "message": "Olá!"
   }'
 ```
 
-Resposta:
-```json
-{
-  "conversation_id": "uuid-da-conversa",
-  "response": "Olá! Fico feliz em ajudar com informações sobre nossos produtos...",
-  "tokens": 45,
-  "cost": 0.000123,
-  "processing_time": 0.89
-}
-```
+---
 
-## 🏗️ Arquitetura
+## 🛠️ Stack
 
-```
-ai-agent-backend-v2/
-├── main.py                          # Aplicação FastAPI
-├── init_database.sql                # Script de inicialização do banco
-├── app/
-│   ├── api/
-│   │   ├── health.py               # Health checks
-│   │   ├── agents.py               # CRUD de agentes
-│   │   └── conversations.py        # Gestão de conversas
-│   ├── core/
-│   │   └── database.py             # Conexão + Inicialização automática
-│   ├── models/
-│   │   └── __init__.py             # SQLAlchemy models
-│   └── services/
-│       ├── llm_service.py          # Integração OpenAI
-│       └── conversation_service.py # Lógica de conversação
-├── requirements.txt                # Dependências Python
-├── Procfile                        # Comando de start
-└── railway.json                    # Configuração Railway
-```
+- Python 3.11
+- FastAPI 0.109
+- PostgreSQL 15
+- SQLAlchemy 2.0
+- OpenAI GPT-4o-mini
 
-## 🛠️ Stack Tecnológico
+---
 
-- **Framework**: FastAPI 0.109.0
-- **Database**: PostgreSQL 15
-- **ORM**: SQLAlchemy 2.0
-- **LLM**: OpenAI GPT-4o-mini
-- **Hosting**: Railway
+## 📊 API Endpoints
 
-## 💰 Custos Estimados
+- `GET /health` - Status do sistema
+- `GET /api/agents` - Listar agentes
+- `POST /api/agents` - Criar agente
+- `POST /api/chat` - Enviar mensagem
+- `GET /api/conversations` - Listar conversas
+- Documentação completa: `/docs`
 
-- **Railway**: €5-20/mês (database + hosting)
-- **OpenAI API**: €0.15 por 1M tokens input (GPT-4o-mini)
-- **Total para ~5.000 mensagens/mês**: €10-30/mês
+---
 
-## 📊 Features
+## 💰 Custos
 
-- [x] API REST completa
-- [x] Inicialização automática do banco
-- [x] Múltiplos agentes
-- [x] Histórico de conversas
-- [x] Cálculo de custos
-- [x] Health checks
-- [x] Documentação Swagger
-- [ ] RAG (Fase 2)
-- [ ] WhatsApp (Fase 2)
-- [ ] Email (Fase 2)
+- Railway: €5/mês (Starter)
+- OpenAI: ~€0.10 por 1000 mensagens
+- **Total**: ~€10-20/mês
 
-## 🐛 Troubleshooting
+---
 
-### Erro 500 ao chamar agente
+## 🆘 Suporte
 
-1. Verifique logs no Railway
-2. Confirme `DATABASE_URL` existe
-3. Confirme `OPENAI_API_KEY` está correta
-4. Teste: `curl https://seu-projeto.up.railway.app/health`
+Se algo der errado, consulte **README_RAILWAY.md** seção "Solução de Problemas".
 
-### Banco não inicializa
+---
 
-1. Veja logs do primeiro deploy
-2. Procure por "🚀 Primeira execução detectada"
-3. Se necessário, execute `init_database.sql` manualmente no Railway
-
-## 📝 Changelog
-
-### v2.0.0 (Janeiro 2025)
-- Inicialização automática do banco de dados
-- Removida dependência de Railway CLI
-- Adicionados 2 agentes pré-configurados
-- Melhorado sistema de health checks
-- Simplificado processo de deployment
-
-### v1.0.0
-- Release inicial
-
-## 📄 Licença
-
-Propriedade do cliente. Código não pode ser reutilizado ou comercializado sem autorização.
-
-## 👨‍💻 Suporte
-
-Para suporte técnico, verifique:
-1. Logs no Railway
-2. Documentação Swagger: `/docs`
-3. Health checks: `/health` e `/health/db`
+**Versão**: 3.0.0  
+**Data**: 20/01/2025  
+**Status**: ✅ Testado no Railway
