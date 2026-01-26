@@ -1,88 +1,97 @@
 """
-FastAPI Application - AI Agent Backend
-Versão FINAL para Railway
+Main FastAPI Application - Sistema de Agentes IA
 """
+import os
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import os
-import sys
 
-from app.api import agents, conversations, health, public
-from app.core.database import init_database
+from database import init_db
+from routes import agents, public, auth
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle - inicializa banco automaticamente"""
-    
-    print("🚀 Iniciando aplicação...")
+    """
+    Lifecycle events
+    """
+    # Startup
+    logger.info("🚀 Iniciando aplicação...")
+    logger.info("🔍 Verificando banco de dados...")
     
     try:
-        init_database()
-        print("✅ Sistema pronto!")
+        init_db()
+        logger.info("✅ Database inicializado")
     except Exception as e:
-        print(f"❌ Erro: {e}")
-        sys.exit(1)
+        logger.error(f"❌ Erro ao inicializar database: {e}")
+        raise
+    
+    logger.info("✅ Sistema pronto!")
     
     yield
     
-    print("👋 Encerrando...")
+    # Shutdown
+    logger.info("👋 Encerrando aplicação...")
 
+
+# Create FastAPI app
 app = FastAPI(
-    title="AI Agent Backend - Dual Frontend",
-    description="""
-    Backend para Sistema de Agentes Conversacionais com Dual-Frontend:
-    - **Admin API**: CRUD completo de agentes (autenticado)
-    - **Public API**: Chat público via slug único (sem autenticação)
-    
-    ## Endpoints Principais
-    
-    ### Admin (Privado)
-    - `GET /api/agents` - Lista todos agentes
-    - `POST /api/agents` - Cria novo agente (gera slug automático)
-    - `PUT /api/agents/{id}` - Atualiza agente
-    - `DELETE /api/agents/{id}` - Desativa agente (soft delete)
-    
-    ### Public (Público)
-    - `GET /api/public/agents/{slug}` - Dados públicos do agente
-    - `POST /api/public/agents/{slug}/chat` - Envia mensagem
-    - `GET /api/public/agents/{slug}/history/{session_id}` - Histórico
-    
-    ### Chat (Ambos)
-    - `POST /api/chat` - Endpoint original de chat
-    """,
-    version="4.0.0",
+    title="Sistema de Agentes IA",
+    description="Plataforma de agentes conversacionais inteligentes",
+    version="1.0.0",
     lifespan=lifespan
 )
 
+
+# CORS Configuration
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(health.router, tags=["Health"])
-app.include_router(public.router, prefix="/api/public", tags=["Public Chat"])
-app.include_router(agents.router, prefix="/api", tags=["Agents"])
-app.include_router(conversations.router, prefix="/api", tags=["Conversations"])
+
+# Health Check
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "service": "agentes-ia-backend",
+        "version": "1.0.0"
+    }
+
 
 @app.get("/")
 async def root():
+    """Root endpoint"""
     return {
-        "message": "AI Agent Backend - Dual Frontend",
-        "version": "4.0.0",
-        "status": "online",
+        "message": "Sistema de Agentes IA - API",
+        "version": "1.0.0",
         "docs": "/docs",
-        "features": {
-            "admin_api": "/api/agents",
-            "public_chat": "/api/public/agents/{slug}/chat",
-            "health": "/health"
-        }
+        "health": "/health"
     }
+
+
+# Include routers
+app.include_router(auth.router)      # /api/auth
+app.include_router(agents.router)    # /api/agents
+app.include_router(public.router)    # /api/public
+
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    port = int(os.getenv("PORT", "8080"))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
