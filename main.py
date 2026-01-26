@@ -1,6 +1,3 @@
-"""
-Main FastAPI Application - Sistema de Agentes IA
-"""
 import os
 import logging
 from fastapi import FastAPI
@@ -10,49 +7,38 @@ from contextlib import asynccontextmanager
 from database import init_db
 from routes import agents, public, auth
 
-# Configurar logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Lifecycle events
-    """
-    # Startup
-    logger.info("🚀 Iniciando aplicação...")
-    logger.info("🔍 Verificando banco de dados...")
-    
+    logger.info("="*80)
+    logger.info("🚀 Sistema de Agentes IA - Build v2.0.1")
+    logger.info("="*80)
     try:
         init_db()
-        logger.info("✅ Database inicializado")
+        logger.info("✅ Database OK")
     except Exception as e:
-        logger.error(f"❌ Erro ao inicializar database: {e}")
+        logger.error(f"❌ Database error: {e}")
         raise
     
-    logger.info("✅ Sistema pronto!")
-    
+    cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+    logger.info(f"🌐 CORS: {cors_origins}")
+    logger.info("✅ Ready!")
+    logger.info("="*80)
     yield
-    
-    # Shutdown
-    logger.info("👋 Encerrando aplicação...")
+    logger.info("👋 Shutdown")
 
-
-# Create FastAPI app
 app = FastAPI(
-    title="Sistema de Agentes IA",
-    description="Plataforma de agentes conversacionais inteligentes",
-    version="1.0.0",
+    title="Agentes IA API",
+    version="2.0.1",
     lifespan=lifespan
 )
 
+cors_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+cors_origins = [o.strip() for o in cors_str.split(",")]
 
-# CORS Configuration
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+logger.info(f"🔐 CORS Origins: {cors_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,38 +46,17 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
-
-
-# Health Check
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": "agentes-ia-backend",
-        "version": "1.0.0"
-    }
-
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
-    return {
-        "message": "Sistema de Agentes IA - API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "health": "/health"
-    }
+    return {"service": "Agentes IA API", "version": "2.0.1", "status": "ok"}
 
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "version": "2.0.1"}
 
-# Include routers
-app.include_router(auth.router)      # /api/auth
-app.include_router(agents.router)    # /api/agents
-app.include_router(public.router)    # /api/public
-
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", "8080"))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+app.include_router(auth.router)
+app.include_router(agents.router)
+app.include_router(public.router)
