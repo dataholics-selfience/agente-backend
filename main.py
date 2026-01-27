@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db
-from routes import auth, agents
+from routes import auth, agents, analytics
 import os
 
 app = FastAPI(title="Agentes IA API", version="3.0.0-FIXED")
@@ -20,6 +20,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(agents.router)
+app.include_router(analytics.router)
 
 @app.on_event("startup")
 async def startup():
