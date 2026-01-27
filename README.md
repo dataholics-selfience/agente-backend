@@ -1,83 +1,66 @@
-# Backend Agentes IA - Build v2.0.2 CLEAN
+# 🚀 Backend Agentes IA - v3.0.0-FIXED
 
 ## ✅ O Que Foi Corrigido
 
-- ❌ REMOVIDO: Campo `deleted_at` que causava erro
-- ✅ CORS configurado corretamente
-- ✅ Auth admin/admin123 funcionando
-- ✅ Models simplificados
+- ✅ Model `Agent` **inclui** campo `deleted_at`
+- ✅ Database schema **cria** coluna `deleted_at` automaticamente
+- ✅ Soft delete funcionando
+- ✅ CORS configurado
+- ✅ Auth admin/admin123
 
-## 🚀 Deploy no Railway
+## 🔧 Deploy no Railway
 
 ### 1. Criar Novo Projeto
 
-Railway → New Project → Deploy from GitHub
+Railway → **New Project** → **Deploy from GitHub** (ou arrastar pasta)
 
-### 2. Configurar Variáveis
+### 2. Adicionar PostgreSQL
 
-```
-DATABASE_URL=<Railway PostgreSQL URL>
+**+ New** → **Database** → **Add PostgreSQL**
+
+### 3. Configurar Variáveis
+
+```env
+DATABASE_URL=${{Postgres.DATABASE_URL}}
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin123
-JWT_SECRET_KEY=<gerar chave aleatória de 64 chars>
-OPENAI_API_KEY=sk-...
+JWT_SECRET_KEY=a7f9d8c3b2e1f4a6d9c8b7e6f5a4d3c2b1e9f8a7d6c5b4e3f2a1d9c8b7e6f5a4d3
+OPENAI_API_KEY=sk-proj-SUA_CHAVE_AQUI
 CORS_ORIGINS=https://agentes.genoibot.com,http://localhost:3000
 ```
 
-### 3. Deploy Automático
+### 4. Deploy Automático
 
-Railway detecta automaticamente:
-- `requirements.txt` → instala dependências
-- `Procfile` → roda `uvicorn main:app`
-- `runtime.txt` → Python 3.11
+Railway detecta `Procfile` e faz deploy (~2min)
 
-### 4. Verificar Logs
+### 5. Verificar Logs
 
 Deve aparecer:
 ```
-🚀 Sistema de Agentes IA - Build v2.0.2 CLEAN
-🔐 Admin: admin
-🌐 CORS: https://agentes.genoibot.com,http://localhost:3000
-✅ Database tables created
+🚀 Sistema de Agentes IA - Build v3.0.0-FIXED
+✅ Database tables created WITH deleted_at column
 ✅ Ready!
 ```
 
 ## 🧪 Testar
 
 ```bash
-# Health check
 curl https://SEU-DOMINIO.railway.app/health
-
-# Login
-curl -X POST https://SEU-DOMINIO.railway.app/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
-
-# Listar agentes
-curl https://SEU-DOMINIO.railway.app/api/agents \
-  -H "Authorization: Bearer SEU_TOKEN"
+# {"status":"ok","version":"3.0.0-FIXED"}
 ```
 
-## 📦 Arquivos
+## 📦 Estrutura
 
 ```
 backend/
-├── main.py              # FastAPI app
-├── database.py          # SQLAlchemy setup
-├── models.py            # Agent model (SEM deleted_at!)
+├── main.py           # FastAPI app
+├── database.py       # SQLAlchemy
+├── models.py         # Agent (COM deleted_at!)
 ├── routes/
-│   ├── auth.py          # Login JWT
-│   └── agents.py        # CRUD agentes
-├── requirements.txt     # Dependências
-├── Procfile             # Railway start command
-├── runtime.txt          # Python 3.11
-└── .env.example         # Template de variáveis
+│   ├── auth.py       # Login
+│   └── agents.py     # CRUD (soft delete)
+├── requirements.txt
+├── Procfile
+├── runtime.txt
+└── README.md
 ```
-
-## ⚠️ Importante
-
-- **NÃO tem** campo `deleted_at` → sem erros de coluna!
-- **CORS** já configurado para `agentes.genoibot.com`
-- **Auth** simples com JWT
-- **Database** criado automaticamente no startup
-

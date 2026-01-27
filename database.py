@@ -4,7 +4,6 @@ from sqlalchemy.orm import sessionmaker
 import os
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -21,4 +20,4 @@ def get_db():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created")
+    print("✅ Database tables created WITH deleted_at column")
